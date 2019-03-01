@@ -29,9 +29,6 @@ Other Software needed
 
 Deploy to AWS using the following script
 
-`$prefix` prefixes the terraform environment, so you can install multiple
-STINGAR instances inside the same AWS instance
-
 ```
 ./stingar deploy
 ```
@@ -43,3 +40,8 @@ If you would like to debug, you can ssh in using
 ```
 
 `$server_type` should be one of `api`, `cowrie`
+
+# Notes
+
+Some local configuration, including a new SSH RSA key will be placed in
+`~/.stingar_deployment` for later use
