@@ -1,6 +1,6 @@
-# Cloud-Deply
+# Stingar-CLI
 
-Deploy STINGAR in to a cloud environment
+Deploy and Manage STINGAR in to a cloud environment
 
 # Requirements
 
@@ -11,7 +11,15 @@ AWS_ACCESS_KEY=foo
 AWS_SECRET_KEY=bar
 ```
 
-Software needed
+Install dependancies using:
+
+```
+pip install -r requirements.txt
+```
+
+Be sure your pip matches the version ansible is using
+
+Other Software needed
 
 [Terraform Inventory](https://github.com/adammck/terraform-inventory)
 [Ansible](https://www.ansible.com/)
@@ -25,13 +33,13 @@ Deploy to AWS using the following script
 STINGAR instances inside the same AWS instance
 
 ```
-./deploy.sh $prefix
+./stingar deploy
 ```
 
 If you would like to debug, you can ssh in using
 
 ```
-./ssh.sh $prefix $server_type
+./stingar ssh $server_type
 ```
 
-`$server_type` should be one of `api`, `cowrie`, `dionea`
+`$server_type` should be one of `api`, `cowrie`
