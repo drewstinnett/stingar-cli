@@ -1,0 +1,6 @@
+---
+
+- name: Copy in helper
+  template:
+    src: "help.md.j2"
+    dest: "~/stingar_deployment/.credentials/{{ identifier }}/help.md"

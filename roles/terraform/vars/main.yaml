@@ -1,0 +1,6 @@
+---
+stingar_config_dir: "~/.stingar_deployment/default"
+prefix: "{{ identifier }}-"
+real_ssh_port: 4222
+ssh_priv_key: "{{ stingar_config_dir }}/credentials/id_rsa"
+ssh_pub_key: "{{ stingar_config_dir }}/credentials/id_rsa.pub"

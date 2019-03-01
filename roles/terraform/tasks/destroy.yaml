@@ -1,0 +1,10 @@
+---
+- name: Run terraform destroy
+  terraform:
+    project_path: "{{ stingar_config_dir }}/{{ cloud_flavor }}"
+    state: absent
+
+- name: Remove configs
+  file:
+    path: "{{ stingar_config_dir }}"
+    state: absent

@@ -1,0 +1,18 @@
+# Stingar for {{ identifier }}
+
+To get started, log in to your CHN Server instance with:
+
+```
+ssh -i YOUR_RSA_ID -p 4222 stingar-{{ identifier }}.oit.duke.edu
+```
+
+Set the `admin@localhost` administrative password using:
+
+```
+docker exec -ti chnserver python /opt/manual_password_reset.py
+Enter email address: admin@localhost
+Enter new password:
+Enter new password (again):
+user found, updating password
+```
+

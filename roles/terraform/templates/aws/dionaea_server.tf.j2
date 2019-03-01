@@ -1,0 +1,53 @@
+resource "aws_instance" "{{ prefix }}dionaea_server" {
+  ami           = "${data.aws_ami.ubuntu.id}"
+  count         = "${lookup(var.honeypot_counts, "dionaea", var.honeypot_counts["undefined"])}"
+  instance_type = "${var.instance_type}"
+  user_data     = "${file("user-data.txt")}"
+  subnet_id = "${aws_subnet.{{ prefix }}stingar.id}"
+  associate_public_ip_address = true
+  vpc_security_group_ids = [
+    "${aws_security_group.{{ prefix }}dionaea-server-sg.id}",
+    "${aws_security_group.{{ prefix }}generic-honeypot-sg.id}"
+  ]
+
+  tags {
+    Name    = "{{ prefix }}dionaea-server-${count.index}"
+    Stingar_Type = "dionaea_server"
+  }
+
+}
+
+resource "aws_security_group" "{{ prefix }}dionaea-server-sg" {
+  name        = "{{ prefix }}dionaea-server-sg"
+  description = "{{ prefix }}Cowrie Server Security Group"
+  vpc_id = "${aws_vpc.{{ prefix }}stingar.id}"
+
+  ingress {
+    from_port = "21"
+    to_port = "21"
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = "23"
+    to_port = "23"
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = "443"
+    to_port = "443"
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = "445"
+    to_port = "445"
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+}

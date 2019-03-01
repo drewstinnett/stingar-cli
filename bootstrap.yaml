@@ -1,0 +1,16 @@
+---
+
+- hosts: all
+  roles:
+    - bootstrap
+
+- hosts: stingar_type_api_server
+  tasks:
+    - name: Configure API Server
+      include_role:
+        name: bootstrap
+        tasks_from: api.yaml
+
+    - name: Configure API Server for Stingar API
+      include_role:
+        name: api

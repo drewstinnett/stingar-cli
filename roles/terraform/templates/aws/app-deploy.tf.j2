@@ -1,0 +1,12 @@
+resource "null_resource" "{{ prefix }}deploy_app" {
+
+  provisioner "local-exec" {
+    command = "ansible-playbook -i $(which terraform-inventory) site.yaml --extra-vars=internal_api_ip=${aws_instance.{{ prefix }}api_server.private_ip} --extra-vars=ansible_ssh_port=${var.real_ssh_port} prefix={{ prefix }}"
+  } 
+
+  depends_on = [
+    "aws_instance.{{ prefix }}api_server",
+    "aws_instance.{{ prefix }}cowrie_server",
+  ]
+
+}

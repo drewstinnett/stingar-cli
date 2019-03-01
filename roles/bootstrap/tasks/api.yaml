@@ -1,0 +1,126 @@
+---
+
+- name: Add ansible ppa
+  apt_repository:
+    repo: ppa:ansible/ansible
+  when: ansible_os_family == 'Debian'
+
+- name: Update apt cache
+  apt:
+    update_cache: true
+    cache_valid_time: 86400
+  when: ansible_os_family == 'Debian'
+
+- name: Install Packages
+  package:
+    name: "{{ item }}"
+  with_items:
+    - ansible
+    - golang-cfssl
+
+- name: Set ansible private key file
+  ini_file:
+    path: /etc/ansible/ansible.cfg
+    section: defaults
+    option: private_key_file
+    value: "{{ protected_creds_dir }}/id_rsa"
+
+- name: Set ansible remote port
+  ini_file:
+    path: /etc/ansible/ansible.cfg
+    section: defaults
+    option: remote_port
+    value: 4222
+
+- name: Set ansible host key checking
+  ini_file:
+    path: /etc/ansible/ansible.cfg
+    section: defaults
+    option: host_key_checking
+    value: 'False'
+
+- name: Create Directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  with_items:
+    - "{{ ca_base_dir }}"
+    - "{{ protected_creds_dir }}"
+    - "{{ certificates_base_dir }}"
+
+- name: Copy in CA Config files
+  template:
+    src: "{{ item }}.j2"
+    dest: "{{ ca_base_dir }}/{{ item }}"
+  with_items:
+    - ca-config.json
+    - ca-csr.json
+
+- name: Generate CA certs if necessary
+  shell: cfssl gencert -initca ca-csr.json | cfssljson -bare ca -
+  args:
+    chdir: "{{ ca_base_dir }}"
+    creates: "{{ ca_base_dir }}/ca-key.pem"
+
+- name: Copy in SSH Private key
+  copy:
+    src: "{{ ssh_priv_key }}"
+    dest: "{{ protected_creds_dir }}/id_rsa"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Create cert dirs for other hosts
+  file:
+    dest: "{{ certificates_base_dir }}/{{ item }}"
+    state: directory
+  with_items: "{{ groups['type_aws_instance'] }}"
+
+- name: Copy in client CSR
+  template:
+    src: "csr.json.j2"
+    dest: "{{ certificates_base_dir }}/{{ item }}/csr.json"
+  with_items: "{{ groups['type_aws_instance'] }}"
+
+- name: Copy in server CSR
+  template:
+    src: "csr.json.j2"
+    dest: "{{ mutual_tls_dir }}/csr.json"
+  with_items: "{{ inventory_hostname }}"
+
+- name: Generate client certs
+  shell: |
+    cfssl gencert -ca={{ ca_base_dir }}/ca.pem \
+    -ca-key={{ ca_base_dir }}/ca-key.pem \
+    -config={{ ca_base_dir }}/ca-config.json \
+    -profile=client csr.json | cfssljson -bare client
+  args:
+    chdir: "{{ certificates_base_dir }}/{{ item }}"
+    creates: "{{ certificates_base_dir }}/{{ item }}/client.pem"
+  with_items: "{{ groups['type_aws_instance'] }}"
+
+- name: Copy in the CA cert for easy access
+  copy:
+    src: "{{ ca_base_dir }}/ca.pem"
+    dest: "{{ certificates_base_dir }}/{{ item }}/ca.pem"
+    remote_src: true
+  with_items: "{{ groups['type_aws_instance'] }}"
+
+- name: Generate server cert
+  shell: |
+    cfssl gencert -ca={{ ca_base_dir }}/ca.pem \
+    -ca-key={{ ca_base_dir }}/ca-key.pem \
+    -config={{ ca_base_dir }}/ca-config.json \
+    -profile=server csr.json | cfssljson -bare server
+  args:
+    chdir: "{{ mutual_tls_dir }}"
+    creates: "{{ mutual_tls_dir }}/server.pem"
+
+- name: Copy in the CA cert for easy server access
+  copy:
+    src: "{{ ca_base_dir }}/ca.pem"
+    dest: "{{ mutual_tls_dir }}/ca.pem"
+    remote_src: true

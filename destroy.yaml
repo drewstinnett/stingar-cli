@@ -1,0 +1,9 @@
+---
+
+- hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - include_role:
+        name: terraform
+        tasks_from: destroy.yaml

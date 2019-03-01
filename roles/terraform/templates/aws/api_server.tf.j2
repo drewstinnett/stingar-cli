@@ -1,0 +1,108 @@
+resource "aws_instance" "{{ prefix }}api_server" {
+  ami           = "${data.aws_ami.ubuntu.id}"
+  instance_type = "t2.small"
+  user_data = "${file("user-data.txt")}"
+  subnet_id = "${aws_subnet.{{ prefix }}stingar.id}"
+  associate_public_ip_address = true
+
+  vpc_security_group_ids = [
+    "${aws_security_group.{{ prefix }}api-server-sg.id}"
+  ]
+
+  tags {
+    Name    = "{{ prefix }}api-server-${count.index}"
+    Stingar_Type = "api_server"
+  }
+}
+
+resource "aws_security_group" "{{ prefix }}api-server-sg" {
+  name        = "{{ prefix }}api-server-sg"
+  description = "{{ prefix }}API Server Security Group"
+  vpc_id = "${aws_vpc.{{ prefix }}stingar.id}"
+
+  # TODO: How do we want to limit ssh access in?
+  ingress {
+    from_port = "${var.real_ssh_port}"
+    to_port = "${var.real_ssh_port}"
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    cidr_blocks = [
+      "${var.trusted_network}",
+    ]
+    security_groups = [
+      "${aws_security_group.{{ prefix }}generic-honeypot-sg.id}"
+    ]
+  }
+
+  ingress {
+    from_port = 24224
+    to_port = 24224
+    protocol = "tcp"
+    cidr_blocks = [
+      "${var.trusted_network}",
+    ]
+    security_groups = [
+      "${aws_security_group.{{ prefix }}generic-honeypot-sg.id}"
+    ]
+  }
+
+  ingress {
+    from_port = 24224
+    to_port = 24224
+    protocol = "udp"
+    cidr_blocks = [
+      "${var.trusted_network}",
+    ]
+    security_groups = [
+      "${aws_security_group.{{ prefix }}generic-honeypot-sg.id}"
+    ]
+  }
+
+  ingress {
+    from_port = 10000
+    to_port = 10000
+    protocol = "tcp"
+    cidr_blocks = [
+      "${var.trusted_network}",
+    ]
+    security_groups = [
+      "${aws_security_group.{{ prefix }}generic-honeypot-sg.id}"
+    ]
+  }
+
+  ingress {
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+    cidr_blocks = ["${var.trusted_network}"]
+  }
+
+  ingress {
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Outbound traffic to anywhere
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+}

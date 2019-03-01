@@ -1,0 +1,42 @@
+---
+
+- name: Generate base directory
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "{{ stingar_config_dir }}"
+    - "{{ stingar_config_dir }}/{{ cloud_flavor }}"
+
+- name: Read in the public key
+  set_fact:
+    pub_key_contents: "{{ lookup('file', ssh_pub_key) }}"
+
+- name: Generate real AWS Terraform files
+  template:
+    src: "aws/{{ item }}.j2"
+    dest: "{{ stingar_config_dir }}/aws/{{ item }}"
+  with_items:
+    - aws.tf
+    - api_server.tf
+    - cowrie_server.tf
+    - defaults.tf
+    - dionaea_server.tf
+    - generic-honeypot.tf
+  when: cloud_flavor == 'aws'
+
+- name: Generate useradata
+  template:
+    src: "{{ cloud_flavor }}/user-data.j2"
+    dest: "{{ stingar_config_dir }}/{{ cloud_flavor }}/user-data.txt"
+
+- name: Generate tfvars
+  template:
+    src: "{{ cloud_flavor }}/auto.tfvars.j2"
+    dest: "{{ stingar_config_dir }}/{{ cloud_flavor }}/{{ identifier }}.auto.tfvars"
+
+- name: Run terraform
+  terraform:
+    project_path: "{{ stingar_config_dir }}/{{ cloud_flavor }}"
+    state: present
+    force_init: true

@@ -1,0 +1,11 @@
+---
+global_packages:
+  - docker-compose
+
+ca_base_dir: "/srv/ca"
+certificates_base_dir: "/srv/certificates"
+protected_creds_dir: "/srv/secret"
+
+ssh_priv_key: "{{ stingar_config_dir }}/credentials/id_rsa"
+ssh_pub_key_path: "{{ stingar_config_dir }}/credentials/id_rsa.pub"
+mutual_tls_dir: "/srv/tls"

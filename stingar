@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+import sys
+import argparse
+import os
+import shutil
+import subprocess
+import json
+
+
+def arg_parse():
+    # Choices
+    cloud_choices = ['aws', 'byo']
+
+    parser = argparse.ArgumentParser(
+        description='Deploy stingar to cloud env',)
+    subparsers = parser.add_subparsers(
+        dest='action', help='sub-command help')
+    subparsers.required = True
+
+    deploy_parser = subparsers.add_parser(
+        'deploy',
+        help='Deploy a new STINGAR instance')
+    subparsers.add_parser(
+        'list',
+        help='List STINGAR instances')
+
+    deploy_parser.add_argument(
+        '-i', '--identifier', help='Identifier.  Good for prefixing',
+        default='default'
+    )
+    deploy_parser.add_argument(
+        '-f', '--cloud-flavor', help='Cloud flavor to deploy to',
+        choices=cloud_choices, default='aws'
+    )
+
+    destroy_parser = subparsers.add_parser(
+        'destroy',
+        help='Destroy an existing STINGAR deployment'
+    )
+
+    destroy_parser.add_argument(
+        '-i', '--identifier', help="Identifier.  Default: 'default'",
+        default='default'
+    )
+    destroy_parser.add_argument(
+        '-f', '--cloud-flavor', help='Cloud flavor to deploy to',
+        choices=cloud_choices, default='aws'
+    )
+
+    ssh_parser = subparsers.add_parser(
+        'ssh',
+        help='SSH in to a remote cloud instance'
+    )
+    ssh_parser.add_argument(
+        '-i', '--identifier', help='Identifier.  Good for prefixing',
+        default='default'
+    )
+    ssh_parser.add_argument(
+        '-f', '--cloud-flavor', help='Cloud flavor to deploy to',
+        default='aws', choices=cloud_choices
+    )
+    ssh_parser.add_argument('instance', help='Instance to connect to')
+
+    info_parser = subparsers.add_parser(
+        'info',
+        help='Show information about a deployment'
+    )
+    info_parser.add_argument(
+        '-i', '--identifier', help='Identifier.  Good for prefixing',
+        default='default'
+    )
+    info_parser.add_argument(
+        '-f', '--cloud-flavor', help='Cloud flavor to deploy to',
+        choices=cloud_choices, default='aws'
+    )
+
+    return parser.parse_args()
+
+
+def ensure_dir(path):
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        sys.stderr.write("Creating %s\n" % path)
+        os.mkdir(path)
+    return path
+
+
+def ensure_key(key_path):
+    if os.path.exists(key_path):
+        return True
+    else:
+        keygen_bin = shutil.which("ssh-keygen")
+        subprocess.run([
+            keygen_bin,
+            '-f', key_path,
+            '-N', ''
+        ])
+        return True
+
+
+def run_playbook(playbook, extra_vars={}, inventory=None):
+    ansible_pb_bin = shutil.which("ansible-playbook")
+    run = [
+        ansible_pb_bin,
+        playbook
+    ]
+    if inventory:
+        run.extend([
+            '-i', inventory,
+        ])
+
+    for var_name, var_value in extra_vars.items():
+        run.extend(
+            ['--extra-vars', '%s=%s' % (var_name, var_value)]
+        )
+    r = subprocess.run(run)
+
+    if r.returncode != 0:
+        raise Exception("BustedPlaybookRun")
+
+
+def get_config_paths(identifier, cloud_flavor):
+    base_config_dir = ensure_dir("~/.stingar_deployment")
+
+    paths = {}
+    paths['id_dir'] = os.path.join(base_config_dir, identifier)
+    paths['cloud_dir'] = os.path.join(paths['id_dir'], cloud_flavor)
+    paths['cred_dir'] = os.path.join(paths['id_dir'], "credentials")
+    paths['priv_key'] = os.path.join(paths['cred_dir'], 'id_rsa')
+    return paths
+
+
+def main():
+    args = arg_parse()
+
+    # Set up super base stuff
+    base_config_dir = ensure_dir("~/.stingar_deployment")
+    tfi_bin = shutil.which("terraform-inventory")
+    tf_bin = shutil.which("terraform")
+
+    if args.action == 'deploy':
+        # Set up some generic paths
+        id_dir = os.path.join(base_config_dir, args.identifier)
+        cloud_dir = os.path.join(id_dir, args.cloud_flavor)
+        cred_dir = os.path.join(id_dir, "credentials")
+        ensure_dir(id_dir)
+        ensure_dir(cred_dir)
+        priv_key = os.path.join(cred_dir, 'id_rsa')
+        ensure_key(priv_key)
+
+        print("Deploying cloud config...")
+        run_playbook(
+            'deploy_%s.yaml' % args.cloud_flavor,
+            {
+                'identifier': args.identifier,
+                'cloud_flavor': args.cloud_flavor,
+                'stingar_config_dir': id_dir
+            }
+        )
+
+        print("Bootstrapping Stingar...")
+        os.environ['TF_STATE'] = os.path.join(cloud_dir, 'terraform.tfstate')
+        run_playbook(
+            'bootstrap.yaml',
+            extra_vars={
+                'ansible_ssh_private_key_file': priv_key,
+                'ansible_python_interpreter': '/usr/bin/python3',
+                'stingar_config_dir': id_dir
+            },
+            inventory=tfi_bin
+        )
+        inv = json.loads(subprocess.check_output([tfi_bin, '--list']))
+        print("Your instance should now be accessible at:")
+        print('http://%s/api/v2' % inv['stingar_type_api_server'][0])
+    elif args.action == 'list':
+        instances = os.listdir(base_config_dir)
+        print("Found %s instances:" % len(instances))
+        for instance in instances:
+            print(" - %s" % instance)
+    elif args.action == 'ssh':
+        id_dir = os.path.join(base_config_dir, args.identifier)
+        cloud_dir = os.path.join(id_dir, args.cloud_flavor)
+        cred_dir = os.path.join(id_dir, "credentials")
+        priv_key = os.path.join(cred_dir, 'id_rsa')
+        os.environ['TF_STATE'] = os.path.join(cloud_dir, 'terraform.tfstate')
+        inv = json.loads(subprocess.check_output([tfi_bin, '--list']))
+        host = inv["stingar_type_%s_server" % args.instance][0]
+        subprocess.call([
+            'ssh',
+            '-i', priv_key,
+            '-p', '4222',
+            'root@%s' % host
+        ])
+
+    elif args.action == 'info':
+        id_dir = os.path.join(base_config_dir, args.identifier)
+        cloud_dir = os.path.join(id_dir, args.cloud_flavor)
+        cred_dir = os.path.join(id_dir, "credentials")
+        priv_key = os.path.join(cred_dir, 'id_rsa')
+        os.environ['TF_STATE'] = os.path.join(cloud_dir, 'terraform.tfstate')
+        inv = json.loads(subprocess.check_output([tfi_bin, '--list']))
+        print('http://%s/api/v2' % inv['stingar_type_api_server'][0])
+    elif args.action == 'destroy':
+        paths = get_config_paths(args.identifier, args.cloud_flavor)
+        os.environ['TF_STATE'] = os.path.join(
+            paths['cloud_dir'], 'terraform.tfstate')
+
+        try:
+            inv = json.loads(subprocess.check_output([tfi_bin, '--list']))
+        except Exception as e:
+            print(e)
+            sys.stderr.write("Looks like nothing exists here\n")
+            return 1
+
+        print("About to delete instance: %s of cloud flavor %s" % (
+            args.identifier, args.cloud_flavor
+        ))
+        input("Press Enter to continue...")
+        run_playbook(
+            'destroy.yaml',
+            {
+                'identifier': args.identifier,
+                'cloud_flavor': args.cloud_flavor,
+                'stingar_config_dir': paths['id_dir']
+            }
+        )
+
+    else:
+        sys.exit("Unknown action...")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
