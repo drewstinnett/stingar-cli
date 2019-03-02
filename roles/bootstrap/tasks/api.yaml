@@ -16,7 +16,6 @@
     name: "{{ item }}"
   with_items:
     - ansible
-    - golang-cfssl
 
 - name: Set ansible private key file
   ini_file:
@@ -124,3 +123,49 @@
     src: "{{ ca_base_dir }}/ca.pem"
     dest: "{{ mutual_tls_dir }}/ca.pem"
     remote_src: true
+
+- name: Create directories
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "{{ stingar_base }}"
+
+- name: Create data directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+  with_items:
+    - "{{ stingar_base }}/storage"
+    - "{{ stingar_base }}/storage/data"
+
+- name: Download API Server Code
+  git:
+    repo: https://github.com/stingar/stingar-server.git
+    dest: "{{ stingar_base }}/stingar-server"
+
+- name: Download honeypot deployments
+  git:
+    repo: https://github.com/drewstinnett/stingar-ansible-deploy-honeypots.git
+    dest: "{{ stingar_base }}/stingar-ansible-deploy-honeypots"
+
+- name: Copy in docker-compose stuff
+  template:
+    src: "{{ item }}.j2"
+    dest: "{{ stingar_base }}/{{ item }}"
+  with_items:
+    - "stingar.env"
+    - "docker-compose.yaml"
+
+- name: Sysctl memory for elasticsearch
+  sysctl:
+    name: vm.max_map_count
+    value: 262144
+    sysctl_set: true
+    state: present
+    reload: true
+
+- name: Start up containers
+  docker_service:
+    project_src: "{{ stingar_base }}"

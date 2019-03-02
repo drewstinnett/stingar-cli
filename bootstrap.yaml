@@ -10,7 +10,3 @@
       include_role:
         name: bootstrap
         tasks_from: api.yaml
-
-    - name: Configure API Server for Stingar API
-      include_role:
-        name: api

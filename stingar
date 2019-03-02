@@ -136,7 +136,6 @@ def main():
     # Set up super base stuff
     base_config_dir = ensure_dir("~/.stingar_deployment")
     tfi_bin = shutil.which("terraform-inventory")
-    tf_bin = shutil.which("terraform")
 
     if args.action == 'deploy':
         # Set up some generic paths

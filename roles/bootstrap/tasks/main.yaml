@@ -25,13 +25,14 @@
     - "{{ mutual_tls_dir }}"
 
 - name: Install system level packages
-  package:
-    name: "{{ item }}"
-  with_items: "{{ global_packages + os_packages }}"
+  apt:
+    name: "{{ global_packages + os_packages }}"
+    update_cache: true
   register: pkg_res
   retries: 5
   delay: 30
   until: pkg_res is success
+  when: ansible_os_family == 'Debian'
 
 - name: Install python modules
   pip:

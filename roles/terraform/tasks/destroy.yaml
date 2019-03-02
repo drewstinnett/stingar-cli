@@ -1,4 +1,6 @@
 ---
+- debug:
+    var: stingar_config_dir
 - name: Run terraform destroy
   terraform:
     project_path: "{{ stingar_config_dir }}/{{ cloud_flavor }}"
